@@ -42,7 +42,11 @@ done_kb.add(InlineKeyboardButton("✅ Готово", callback_data="done"))
 def clients_keyboard(clients):
     kb = InlineKeyboardMarkup(row_width=2)
     for cl in clients:
-        kb.insert(InlineKeyboardButton(cl.name, callback_data=f"client:{cl.id}"))
+        if cl.name:
+            kb.insert(InlineKeyboardButton(text=cl.name, callback_data=f"client:{cl.id}"))
+        else:
+            print(f'client {cl.id} has no name')
+    print('kb: ', kb)
     return kb
 
 # Кнопки для редагування вправ
@@ -90,4 +94,3 @@ def edit_client_kb(client_id):
     kb.add(InlineKeyboardButton("Готово", callback_data=f"client:{client_id}"))
 
     return kb
-

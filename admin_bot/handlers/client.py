@@ -37,51 +37,78 @@ async def list_clients(message: types.Message, state: FSMContext):
     await message.answer(text, reply_markup=kb)
 
 
-def client_card_text(client: Client):
+def client_card_text(client: Client, programs=None):
     text = f"👤 Ім'я: {client.name}\n"
-    text += f"👦 Дата народження: {client.birth_date} ({client.age} роки)\n"
-    text += "\nСимптоми:\n"
-    text += f"🔎 Що турбує: {client.symptoms}\n"
-    text += f"Де турбує: {client.symptoms_where}\n"
-    text += f"Як давно турбує: {client.symptoms_how_long}\n"
-    text += f"Рівень болю: {client.symptoms_pain_level}\n"
-    text += f"Тиск: {client.blood_pressure}\n"
-    text += f"🎯 Що робить: {client.activities}\n"
-    text += f"\n🔬 Результати дослідження:\n"
-    text += f"Стопи: {client.research_feet}\n"
-    text += f"Коліна: {client.research_knees}\n"
-    text += f"Таз: {client.research_pelvis}\n"
-    text += f"Постава: {client.research_posture}\n"
-    text += "\n Функціональні тести:\n"
-    text += "Спина тригери:\n"
-    text += f"- грудний відділ: {client.func_back_thoracic}\n"
-    text += f"- поперековий відділ: {client.func_back_lumbar}\n"
-    text += f"- шия: {client.func_back_neck}\n"
-    text += f"Кульшові суглоби: {client.func_hips}\n"
-    text += f"Колінні суглоби: {client.func_knees}\n"
-    text += f"Гомілковостопні суглоби: {client.func_ankles}\n"
-    text += f"Стопи: {client.func_feet}\n"
-    text += f"Симетрія нижніх кінцівок: {client.func_symmetry}\n"
-    text += f"Плечі: {client.func_shoulders}\n"
-    text += f"Лікті: {client.func_elbows}\n"
-    text += f"Зап'ястя: {client.func_wrists}\n"
-    text += "\nПобут / Спосіб життя:\n"
-    text += f"Умови роботи: {client.work_conditions}\n"
-    text += f"Заняття спортом/фітнесом: {client.sport}\n"
-    text += f"Використання БАД у харчуванні: {client.supplements}\n"
-    text += f"Використання запобіжних масажерів або тренажерів в домашніх умовах: {client.home_devices}\n"
-    text += "\nВисновки та рекомендації\n"
-    text += "1. Комплексно терапевтичний масаж (кількість/періодичність)\nПроекція масажу:\n"
-    text += f"- Класифікація масажу (глибокотканний, нейроседативний, спортивний, лімфодренажний):\n {client.massage_recommendation}"
-    text += f"Виготовлення індивідуальних ортопедичних устілок:\n {client.insoles}\n"
-    text += f"Запобіжні прилади для профілактики в домашніх умовах:\n {client.preventive_devices}\n"
+    if client.birth_date:
+        text += f"👦 Дата народження: {client.birth_date} (Вік: {client.age})\n"
+    if client.symptoms:
+        text += f"Симптоми:\n {client.symptoms}\n"
+    if client.symptoms_where:
+        text += f"Де турбує: {client.symptoms_where}\n"
+    if client.symptoms_how_long:
+        text += f"Як давно турбує: {client.symptoms_how_long}\n"
+    if client.symptoms_pain_level:
+        text += f"Рівень болю: {client.symptoms_pain_level}\n"
+    if client.blood_pressure:
+        text += f"Тиск: {client.blood_pressure}\n"
+    if client.activities:
+        text += f"🎯 Що робить: {client.activities}\n"
+    
+    if client.research_feet:
+        text += f"\n🔬 Результати дослідження:\n"
+        text += f"Стопи: {client.research_feet}\n"
+    if client.research_knees:
+        text += f"Коліна: {client.research_knees}\n"
+    if client.research_pelvis:
+        text += f"Таз: {client.research_pelvis}\n"
+    if client.research_posture:
+        text += f"Постава: {client.research_posture}\n"
+    if client.func_back_thoracic:
+        text += f"Спина тригері: - грудний відділ: {client.func_back_thoracic}\n"
+    if client.func_back_lumbar:
+        text += f"Спина тригері: - поперековий відділ: {client.func_back_lumbar}\n"
+    if client.func_back_neck:
+        text += f"Спина тригері: - шия: {client.func_back_neck}\n"
+    if client.func_hips:
+        text += f"Кульшові суглоби: {client.func_hips}\n"
+    if client.func_knees:
+        text += f"Колінні суглоби: {client.func_knees}\n"
+    if client.func_ankles:
+        text += f"Гомілковостопні суглоби: {client.func_ankles}\n"
+    if client.func_feet:
+        text += f"Стопи: {client.func_feet}\n"
+    if client.func_symmetry:
+        text += f"Симетрія нижніх кінцівок: {client.func_symmetry}\n"
+    if client.func_shoulders:
+        text += f"Плечі: {client.func_shoulders}\n"
+    if client.func_elbows:
+        text += f"Лікті: {client.func_elbows}\n"
+    if client.func_wrists:
+        text += f"Зап'ястя: {client.func_wrists}\n"
+    if client.work_conditions:
+        text += f"\nПобут / Спосіб життя:\n Умови роботи: {client.work_conditions}\n"
+    if client.sport:
+        text += f"Заняття спортом/фітнесом: {client.sport}\n"
+    if client.supplements:
+        text += f"Використання БАД у харчуванні: {client.supplements}\n"
+    if client.home_devices:
+        text += f"Використання запобіжних масажерів або тренажерів в домашніх умовах: {client.home_devices}\n"
+    if client.conclusion:
+        text += f"\nВисновки та рекомендації\n {client.conclusion}"
+    if client.massage_recommendation:
+        text += f"1. Комплексно терапевтичний масаж (кількість/періодичність)\n Проекція масажу:\n {client.massage_recommendation}"
+    if client.insoles:
+        text += f"Виготовлення індивідуальних ортопедичних устілок:\n {client.insoles}\n"
+    if client.preventive_devices:
+        text += f"Запобіжні прилади для профілактики в домашніх умовах:\n {client.preventive_devices}\n"
     text += f"\n🔗 Посилання для активації бота: https://t.me/{userbot_username}?start={client.id}"
-    if client.programs:
+    if programs:
         text += "\n\n----\n"
-        text += f"Програми: ({len(client.programs)})\n"
-        for program in client.programs:
+        text += f"Програми: ({len(programs)})\n"
+        for program in programs:
             text += f"- {program.course.name}\n"
     return text
+
 
 from aiogram.types import InputMediaPhoto
 
@@ -90,8 +117,8 @@ async def client_card(call: types.CallbackQuery, state: FSMContext):
     print('client_id: ', client_id)
     db = SessionLocal()
     client = db.query(Client).get(client_id)
-
-    text = client_card_text(client)
+    programs = db.query(Program).filter(Program.client_id == client_id).all()
+    text = client_card_text(client, programs)
     kb = client_actions_kb(client_id)
     client_photos = db.query(ClientPhoto).filter(ClientPhoto.client_id == client_id).all()
     print('client_photos: ', client_photos)

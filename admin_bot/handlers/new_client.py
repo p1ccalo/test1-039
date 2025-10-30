@@ -2,15 +2,19 @@ from aiogram import types, Dispatcher
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload, Session
 from datetime import datetime
-
+from typing import Union
 from backend.db import SessionLocal
 from backend.models import Client, User, ClientPhoto
 from admin_bot.states.add_client import AddClient, STATE_TITLES
 import os
 import dotenv
 from config import CLIENT_PHOTOS_DIR as client_photos_dir
+from .client import client_card_text
+from aiogram import Bot
+
+bot = Bot.get_current()
 
 dotenv.load_dotenv()
 userbot_username = os.getenv("USERBOT_USERNAME")
@@ -39,42 +43,70 @@ def get_unique_answers(field_name: str):
 
 
 # --- 🔸 Клавіатура з унікальних минулих відповідей ---
-def generate_keyboard(field_name: str):
+async def generate_keyboard(field_name: str, state: FSMContext):
+    data = await state.get_data()
+    selected = data.get("selected_values", [])
+
     buttons = []
-    if field_name not in ['name', 'birth_date', 'symptoms', 'symptoms_where', 'symptoms_how_long', 'symptoms_pain_level', 'blood_pressure', 'photos']: 
-        buttons = [
-            [InlineKeyboardButton(text=a[0], callback_data=f"answer:{a[0]}")]
-            for a in get_unique_answers(field_name)
-        ]
-        print(f"buttons: {buttons}")
-    buttons.append([InlineKeyboardButton("⬅️ Назад", callback_data="back")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons, row_width=2)
+
+    from admin_bot.states.add_client import STATE_QUESTION_TYPES
+    field_question_type = STATE_QUESTION_TYPES.get(field_name, None)
 
 
-async def process_birth_date(message: types.Message, state: FSMContext):
-    # Якщо поточне поле — дата народження
-    text = message.text.strip()
+    if field_question_type == "multi":
+        answers = get_unique_answers(field_name)
+        answer_map = {i: a[0] for i, a in enumerate(answers)}
+        await state.update_data(answer_map=answer_map)
 
-    birth_date = None
+        for i, text in answer_map.items():
+            # позначаємо вибрані кнопки
+            prefix = "✅ " if text in selected else ""
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{prefix}{text}",
+                    callback_data=f"multi:{field_name}:{i}"
+                )
+            ])
+
+    # кнопка далі
+    buttons.append([InlineKeyboardButton("➡️ Далі", callback_data=f"next:{field_name}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def choose_multi(call: types.CallbackQuery, state: FSMContext):
+    _, field_name, idx = call.data.split(":")
+    data = await state.get_data()
+    answer_map = data["answer_map"]
+    value = answer_map[int(idx)]
+    selected = data.get("selected_values", [])
+
+    if value in selected:
+        selected.remove(value)
+    else:
+        selected.append(value)
+
+    print("selected", selected)
+    await state.update_data(selected_values=selected)
+
+    # оновлюємо клавіатуру з відмітками ✅
+    kb = await generate_keyboard(field_name, state)
+    await call.message.edit_reply_markup(reply_markup=kb)
+
+
+
+async def process_birth_date(client_id: int, birth_date_text: str):
     for fmt in ("%d.%m.%Y", "%d.%m.%y", "%Y-%m-%d"):
         try:
-            birth_date = datetime.strptime(text, fmt).date()
+            birth_date = datetime.strptime(birth_date_text, fmt).date()
             age = datetime.now().year - birth_date.year
-            date = await state.get_data()
-            client_id = int(date.get("client_id"))
             db = SessionLocal()
             client = db.query(Client).get(client_id)
             client.age = age
             db.commit()
             db.close()
-            await message.answer("Вік: " + str(age))
-            break
+            break 
         except ValueError:
             continue
-
-    if not birth_date:
-        await message.answer("⚠️ Введіть дату у форматі 29.03.1990 або 29.03.90")
-        return
 
     return birth_date
 
@@ -84,93 +116,141 @@ async def process_birth_date(message: types.Message, state: FSMContext):
 async def add_client_start(message: types.Message, state: FSMContext):
     await state.finish()
     await state.set_state(AddClient.name.state)
-    await message.answer("Введіть ім'я клієнта:")
+    card = await message.answer("🧾 Картка клієнта:\n(поки що порожня)")
+    question = await message.answer("Введіть ім’я клієнта:")
+    await state.update_data(card_message_id=card.message_id, question_message_id=question.message_id)
 
 
-# --- 🔹 Обробка текстових відповідей ---
 async def process_field(message: types.Message, state: FSMContext):
-    print('message.text: ', message.text)
+    await answer_func(message, state)
+
+
+async def client_update(client_id: int, state_name, value):
+    db = SessionLocal()
+    client = db.query(Client).get(client_id)
+
+    try:
+        # Якщо поле підтримує кілька виборів — зберігаємо список
+        if isinstance(value, list):
+            setattr(client, state_name, ", ".join(value))
+        else:
+            setattr(client, state_name, value)
+
+        db.commit()
+        db.refresh(client)
+    except Exception as e:
+        print(f"⚠️ Не вдалося оновити {state_name}: {e}")
+    finally:
+        db.close()
+
+    return client
+
+
+async def client_create(name: str):
+    db: Session = SessionLocal()
+    client = Client(name=name)
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    client_id = client.id
+    db.close()
+    return client_id
+
+
+# === 🔹 Основна функція для оновлення картки та переходу далі ===
+async def answer_func(event: Union[types.Message, types.CallbackQuery], state: FSMContext):
+    """
+    Оновлює картку клієнта після відповіді (текст/кнопка),
+    зберігає зміни та переходить до наступного питання.
+    """
+    message = None
+    if isinstance(event, types.CallbackQuery):
+        message = event.message
+        value = event.data.split(":", 1)[1]
+    else:
+        message = event
+        value = message.text.strip()
+
+
     state_name = (await state.get_state()).split(":")[1]
-    value = message.text
-
-    if state_name == "birth_date":
-        value = await process_birth_date(message, state)
-    elif state_name == "photos":
-        return
-
-    print(f"state_name: {state_name}, value: {value}")
     data = await state.get_data()
     client_id = data.get("client_id")
+    card_message_id = data.get("card_message_id")
+    question_message_id = data.get("question_message_id")
     print('client_id: ', client_id)
-    if not client_id:
-        with SessionLocal() as db:
-            client = Client()
-            db.add(client)
-            try:
-                setattr(client, state_name, value)
-            except Exception as e:
-                print(f"⚠️ Не вдалося записати {state_name}: {e}")
-            db.commit()
-            db.refresh(client)
-            print('new client has been created: ', client)
-            await state.update_data(client_id=client.id)
-    else:
-        with SessionLocal() as db:
-            client = db.query(Client).get(client_id)
-            print('client: ', client.name)
-            try:
-                setattr(client, state_name, value)
-            except Exception as e:
-                print(f"⚠️ Не вдалося записати {state_name}: {e}")
-            db.commit()
-            db.refresh(client)
-            print('client has been updated: ', client)
+    print('state_name: ', state_name)
+    print('value: ', value)
+    print('card_message_id: ', card_message_id)
+    print('question_message_id: ', question_message_id)
 
+    # --- 1️⃣ Отримуємо клієнта ---
+    if client_id is None:
+        client_id = await client_create(name=value)
+        print('client_id: ', client_id)
+        await state.update_data(client_id=client_id)
+
+
+    # --- 2️⃣ Оновлюємо відповідь ---
+    if state_name == "birth_date":
+        value = await process_birth_date(client_id, value)
+    client = await client_update(client_id, state_name, value)
+    print('client name:', client.name)
+    await generate_next_question(message, state)
+        
+
+async def generate_next_question(message: types.Message, state: FSMContext):
+    state_name = (await state.get_state()).split(":")[1]
+    data = await state.get_data()
+    client_id = data.get("client_id")
+    card_message_id = data.get("card_message_id")
+    question_message_id = data.get("question_message_id")
+    client = SessionLocal().query(Client).get(client_id)
+        # --- 3️⃣ Оновлюємо картку клієнта ---
+    client_text = client_card_text(client)
+    await bot.delete_message(chat_id=message.chat.id, message_id=card_message_id)
+    await bot.delete_message(chat_id=message.chat.id, message_id=question_message_id)
+    card = await message.answer(client_text)
+    await state.update_data(card_message_id=card.message_id)
+
+    # --- 4️⃣ Наступне питання ---
     next_state = get_next_state(state_name)
     print('next_state: ', next_state)
     if next_state:
         await state.set_state(getattr(AddClient, next_state))
-        if next_state == "photos":
-            text = "📸 Додайте фото або натисніть кнопку готово"
+        if next_state == "photo":
             kb = InlineKeyboardMarkup(row_width=1)
-            kb.add(InlineKeyboardButton("Готово", callback_data="done_photos"))
-            return await message.answer(text, reply_markup=kb)
-        await message.answer(
-            f"Введіть {STATE_TITLES.get(next_state, next_state)}:",
-            reply_markup=generate_keyboard(next_state)
-        )
+            kb.add(InlineKeyboardButton("Готово", callback_data=f"done_photos"))
+            await message.answer("Завантажте фото або натисніть \"Готово\"", reply_markup=kb)
+        else:
+            kb = await generate_keyboard(next_state, state)
+            question = await message.answer(
+                f"Введіть {STATE_TITLES.get(next_state, next_state)}:",
+                reply_markup=kb
+            )
+        await state.update_data(question_message_id=question.message_id)
     else:
+        # --- 5️⃣ Завершення ---
         kb = InlineKeyboardMarkup(row_width=1)
         kb.add(InlineKeyboardButton("Переглянути", callback_data=f"client:{client_id}"))
         await message.answer("✅ Опитування завершено!", reply_markup=kb)
-        await state.finish()
-    db.close()
+        await state.clear()
 
 
-# --- 🔹 Обробка вибору готової відповіді ---
-async def choose_past_answers(call: types.CallbackQuery, state: FSMContext):
-    value = call.data.split(":", 1)[1]
-    print('past answer: ', value)
-    state_name = (await state.get_state()).split(":")[1]
-    db = SessionLocal()
+async def next_question(call: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
+    selected_values = data.get("selected_values")
+    state_name = (await state.get_state()).split(":")[1]
     client_id = data.get("client_id")
-    client = db.query(Client).get(client_id)
-    setattr(client, state_name, value)
-    db.commit()
-    db.close()
+    
+    if selected_values:
+        print('selected_values: ', selected_values)
+        await client_update(client_id, state_name, selected_values)
 
-    next_state = get_next_state(state_name)
-    print('next_state: ', next_state)
-    if next_state:
-        await state.set_state(next_state)
-        await call.message.answer(
-            f"Введіть {STATE_TITLES.get(next_state, next_state)}:",
-            reply_markup=generate_keyboard(next_state)
-        )
-    else:
-        await call.message.answer("✅ Опитування завершено!")
-        await state.finish()
+    await state.update_data(selected_values=[])
+    await generate_next_question(call.message, state)
+
+
+
 
 
 # --- 🔹 Обробка кнопки Назад ---
@@ -184,7 +264,7 @@ async def go_back(call: types.CallbackQuery, state: FSMContext):
     await state.set_state(prev_state)
     await call.message.edit_text(
         f"Введіть {prev_state}:",
-        reply_markup=generate_keyboard(prev_state)
+        reply_markup= await generate_keyboard(prev_state, state)
     )
 
 
@@ -251,6 +331,8 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(add_client_start, lambda m: m.text == '➕ Додати клієнта', state='*')
     dp.register_message_handler(add_new_client_photos, content_types=['photo'], state=AddClient.photos)
     dp.register_message_handler(process_field, state=AddClient)
-    dp.register_callback_query_handler(choose_past_answers, lambda c: c.data.startswith("answer:"), state=AddClient)
+
+    dp.register_callback_query_handler(next_question, lambda c: c.data.startswith("next:"), state=AddClient)
+    dp.register_callback_query_handler(choose_multi, lambda c: c.data.startswith("multi:"), state=AddClient)
     dp.register_callback_query_handler(go_back, lambda c: c.data.startswith("back:"), state=AddClient)
     dp.register_callback_query_handler(add_new_client_confirm, lambda c: c.data.startswith("done_photos"), state=AddClient.photos)

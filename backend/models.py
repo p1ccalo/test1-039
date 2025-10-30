@@ -1,6 +1,7 @@
 from sqlalchemy import Table, Column, Integer, String, ForeignKey, Text, DateTime, Date
 from sqlalchemy.orm import relationship
 from .db import Base
+from sqlalchemy import Sequence
 
 
 client_course = Table(
@@ -12,13 +13,14 @@ client_course = Table(
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('clients_id_seq'), primary_key=True, index=True)
     telegram_id = Column(Integer, nullable=True)
     telegram_username = Column(String, nullable=True)
     last_interaction = Column(DateTime, nullable=True)
     phone = Column(String, nullable=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
+    role = Column(String, nullable=True)
 
     client = relationship("Client", back_populates="user", uselist=False)
     admin = relationship("Admin", back_populates="user", uselist=False)
@@ -27,7 +29,7 @@ class User(Base):
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
 
     name = Column(String, nullable=False)
@@ -86,7 +88,7 @@ class Client(Base):
 
 class Admin(Base):
     __tablename__ = "admins"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('admins_id_seq'), primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     role = Column(String, default="admin")
 
@@ -96,7 +98,7 @@ class Admin(Base):
 
 class ClientPhoto(Base):
     __tablename__ = "client_photos"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('client_photos_id_seq'), primary_key=True, index=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
     photo_url = Column(String, nullable=False)
 
@@ -104,7 +106,7 @@ class ClientPhoto(Base):
 
 class ExercisePhoto(Base):
     __tablename__ = "exercise_photos"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('exercise_photos_id_seq'), primary_key=True, index=True, autoincrement=True)
     exercise_id = Column(Integer, ForeignKey("exercises.id"))
     photo_url = Column(String, nullable=False)
 
@@ -113,7 +115,7 @@ class ExercisePhoto(Base):
 
 class Course(Base):
     __tablename__ = "courses"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('courses_id_seq'), primary_key=True, index=True, autoincrement=True)
     name = Column(String, nullable=False)
     description = Column(Text)
 
@@ -124,7 +126,7 @@ class Course(Base):
 
 class Program(Base):
     __tablename__ = "programs"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('programs_id_seq'), primary_key=True, index=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
     course_id = Column(Integer, ForeignKey("courses.id"))
 
@@ -135,7 +137,7 @@ class Program(Base):
 
 class Exercise(Base):
     __tablename__ = "exercises"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('exercises_id_seq'), primary_key=True, index=True, autoincrement=True)
     name = Column(String, nullable=False)
     tags = Column(String)
     description = Column(Text)
@@ -149,7 +151,7 @@ class Exercise(Base):
 
 class ProgramExercise(Base):
     __tablename__ = "program_exercise"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, Sequence('program_exercise_id_seq'), primary_key=True, index=True, autoincrement=True)
     program_id = Column(Integer, ForeignKey("programs.id"))
     exercise_id = Column(Integer, ForeignKey("exercises.id"))
 

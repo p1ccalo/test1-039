@@ -82,3 +82,42 @@ STATE_TITLES = {
     "photos": "фото клієнта",
 }
 
+STATE_QUESTION_TYPES = {
+    "name": "text",
+    "birth_date": "text",
+
+    "symptoms": "text",
+    "symptoms_where": "multi",
+    "symptoms_how_long": "text",
+    "symptoms_pain_level": "text",
+    "blood_pressure": "text",
+
+    "activities": "multi",
+    "research_feet": "multi",
+    "research_knees": "multi",
+    "research_pelvis": "multi",
+    "research_posture": "multi",
+
+    "func_back_thoracic": "multi",
+    "func_back_lumbar": "multi",
+    "func_back_neck": "multi",
+    "func_hips": "multi",
+    "func_knees": "multi",
+    "func_ankles": "multi",
+    "func_feet": "multi",
+    "func_symmetry": "multi",
+    "func_shoulders": "multi",
+    "func_elbows": "multi",
+    "func_wrists": "multi",
+
+    "work_conditions": "multi",
+    "sport": "multi",
+    "supplements": "multi",
+    "home_devices": "multi",
+
+    "conclusion": "text",
+    "massage_recommendation": "multi",
+    "insoles": "text",
+    "preventive_devices": "multi",
+}
+

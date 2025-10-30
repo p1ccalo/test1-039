@@ -1,30 +1,34 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
-import asyncio
 
-
-
-
+# Завантажуємо .env (щоб отримати DATABASE_URL)
 load_dotenv()
-DATABASE_URL = os.getenv('DATABASE_URL')
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Отримуємо URL бази
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("❌ DATABASE_URL не знайдено в .env")
+
+# Створюємо engine
+engine = create_engine(DATABASE_URL, echo=True, connect_args={"sslmode": "require"})
+
+# Створюємо сесію
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Базовий клас для моделей
 Base = declarative_base()
-session = SessionLocal()
 
+# Ініціалізація БД
 def init_db():
-    import models
-    print("📦 models імпортовано:", dir(models))  # DEBUG
+    import backend.models  # або просто import models, якщо в тій самій папці
+    print("📦 Імпортовано моделі:", dir(backend.models))
     Base.metadata.create_all(bind=engine)
-    print("✅ Таблиці створені у orthospin.db")
-    
-async def save_client(data: dict):
-    await asyncio.sleep(0)
-    return True
+    print("✅ Таблиці синхронізовано з PostgreSQL")
 
+# Для локального запуску
 if __name__ == "__main__":
     init_db()

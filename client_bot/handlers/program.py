@@ -7,17 +7,21 @@ from backend.db import SessionLocal
 from backend.models import Program, Exercise
 import os
 import dotenv
+from backend.models import User
 
 dotenv.load_dotenv()
 EXERCISE_PHOTOS_DIR = os.getenv('EXERCISE_PHOTOS_DIR')
 
 async def msg_my_programs(message: types.Message):
     user_key = str(message.from_user.id)
-    client = get_client_by_tg(user_key) or get_client_by_tg(message.from_user.username or '')
+    db = SessionLocal()
+    user = db.query(User).filter(User.telegram_id == user_key).first()
+    client = user.client
     if not client:
         return await message.answer('Профіль не знайдено. Зверніться до реабілітолога.')
     progs = client.programs
     print('progs', progs)
+    db.close()
     if not progs:
         return await message.answer('Програми поки не призначені.')
     if len(progs) > 1:

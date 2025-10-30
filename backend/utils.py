@@ -2,8 +2,8 @@
 import requests
 import os
 from dotenv import load_dotenv
-from backend.db import session, SessionLocal
-from backend.models import Client, Program, ClientPhoto, Exercise, ExercisePhoto
+from backend.db import SessionLocal
+from backend.models import Client, Program, ClientPhoto, Exercise, ExercisePhoto, User
 import re
 from sqlalchemy.orm import Session
 from aiogram import types
@@ -14,19 +14,27 @@ BACKEND_URL = os.getenv('BACKEND_URL', 'http://127.0.0.1:8000')
 client_photos_dir = os.getenv("CLIENT_PHOTOS_DIR")
 
 def get_client_by_tg(tg_id: str):
-    client = session.query(Client).filter_by(telegram_id=tg_id).first()
-    return client
+    session = SessionLocal()
+    user = session.query(User).filter_by(telegram_id=tg_id).first()
+    if user:
+        client = session.query(Client).filter_by(user_id=user.id).first()
+        if client:
+            return client
+    return None
 
 def get_client_exercises(client_id: int):
+    session = SessionLocal()
     programs = session.query(Program).filter_by(client_id=client_id).all()
     return [p.exercises for p in programs]
 
 def get_client_program_exercises(client_id: int, program_id: int):
+    session = SessionLocal()
     program = session.query(Program).filter_by(client_id=client_id, id=program_id).first()
     return program.exercises
 
 
 def set_client_happies(client_id: int, happies: int):
+    session = SessionLocal()
     client = session.query(Client).filter_by(id=client_id).first()
     client.happies = client.happies + happies
     session.commit()
@@ -179,5 +187,4 @@ async def save_exercise_photos(exercise_id: int, message: types.Message):
     # print("✅ Програма додана")
     # db.commit()
     # db.close()
-
 
