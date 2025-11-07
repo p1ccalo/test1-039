@@ -34,8 +34,12 @@ def _extract_blocks(txt: str):
 
 from sqlalchemy import func
 
-def parse_and_save_rehab_program(db: Session, client: Client, message_text: str):
-    program, created = get_or_create_program(db, client.id, 2)  # курс 2 — Кінезіологія
+def parse_and_save_rehab_program(db: Session, client: Client, message_text: str, dry_run: bool = False):
+    if dry_run:
+        print("\n--- DRY RUN: Parsing Rehab Program ---")
+        program = None # В сухом режиме не получаем программу из БД
+    else:
+        program, created = get_or_create_program(db, client.id, 2)  # курс 2 — Кінезіологія
 
     blocks = _extract_blocks(message_text)
     print("blocks:", blocks)
@@ -96,40 +100,52 @@ def parse_and_save_rehab_program(db: Session, client: Client, message_text: str)
                 # Шукаємо впраy (case-insensitive exact). Можна замінити на normalize_name логіку.
                 exercise = db.query(Exercise).filter(func.lower(Exercise.name) == search_name.lower()).first()
                 if not exercise:
-                    exercise = Exercise(name=name, course_id=2)
-                    db.add(exercise)
-                    print(f"✅ Додано нову вправу (кінезіо): {name}")
+                    if dry_run:
+                        print(f"  [DRY-RUN] Would create new exercise (kinesio): '{name}'")
+                    else:
+                        exercise = Exercise(name=name, course_id=2)
+                        db.add(exercise)
+                        db.commit() # Коммитим сразу, чтобы получить ID для ProgramExercise
+                        db.refresh(exercise)
+                        print(f"✅ Додано нову вправу (кінезіо): {name}")
                     stats["ex_created"] += 1
-                    db.commit()
                 else:
                     stats["ex_found"] += 1
                 
-                print('exercise:', name)
-                program_exercise = db.query(ProgramExercise).filter_by(program_id=program.id).filter_by(exercise_id=exercise.id).first()
-                if not program_exercise:
-                    program_exercise = ProgramExercise(
-                        program_id=program.id,
-                        exercise_id=exercise.id,
-                        weight=weight,
-                        repeats=repeats,
-                        sets=sets,
-                        block=int(block_num),
-                        order_num=order_num
-                    )
-                    db.add(program_exercise)
-                    print(f"✅ Додано вправу (кінезіо) {name} до програми")
-                    db.commit()
+                if dry_run:
+                    print(f"  [DRY-RUN] Would add exercise '{name}' to program. Details: W:{weight}, R:{repeats}, S:{sets}, Block:{block_num}")
                 else:
-                    print(f"⚠️ Вправа (кінезіо) {name} вже існує у програмі")
+                    # Проверяем, есть ли уже такая связка в программе
+                    program_exercise = db.query(ProgramExercise).filter_by(program_id=program.id, exercise_id=exercise.id).first()
+                    if not program_exercise:
+                        program_exercise = ProgramExercise(
+                            program_id=program.id,
+                            exercise_id=exercise.id,
+                            weight=weight,
+                            repeats=repeats,
+                            sets=sets,
+                            block=int(block_num),
+                            order_num=order_num
+                        )
+                        db.add(program_exercise)
+                        print(f"✅ Додано вправу (кінезіо) '{name}' до програми")
+                    else:
+                        print(f"⚠️ Вправа (кінезіо) '{name}' вже існує у програмі, оновлюємо деталі.")
+                        # Опционально: можно обновлять детали, если упражнение уже есть
+                        program_exercise.weight = weight
+                        program_exercise.repeats = repeats
+                        program_exercise.sets = sets
+                        program_exercise.block = int(block_num)
+                        program_exercise.order_num = order_num
 
                 order_in_block += 1
             
     print('stats:', stats)
-    print("✅ Програма кінезіології збережена")                 
-
-
-
-
+    if not dry_run:
+        db.commit()
+        print("✅ Програма кінезіології збережена")
+    else:
+        print("--- DRY RUN Finished ---")
 
 def parse_and_save_homework_program(db: Session, client: Client, message_text: str):
     program, created = get_or_create_program(db, client.id, 1)  # курс 1 — Д/З

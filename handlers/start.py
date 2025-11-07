@@ -1,9 +1,15 @@
 from aiogram import types, Dispatcher
 from backend.models import Client, Admin, User
-from backend.db import SessionLocal
+from backend.db import SessionLocal  # Используем централизованную сессию
 from client_bot.handlers.common import cmd_start as client_cmd_start
 from admin_bot.handlers.start import cmd_start as admin_cmd_start
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 async def set_admin(message: types.Message):
     tg_id = message.from_user.id

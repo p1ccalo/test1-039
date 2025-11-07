@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import asyncio
 import sys
+from backend.db import init_db
 
 
 load_dotenv()
@@ -101,4 +102,6 @@ app.on_startup.append(on_startup)
 # app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
+    # Ініціалізуємо базу даних перед запуском
+    init_db()
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)

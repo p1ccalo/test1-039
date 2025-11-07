@@ -13,9 +13,12 @@ import dotenv
 from config import CLIENT_PHOTOS_DIR as client_photos_dir
 from .client import client_card_text
 from aiogram import Bot
+from pathlib import Path
 
 bot = Bot.get_current()
 
+
+client_photos_dir = Path(__file__).resolve().parent.parent.parent / "static" / "images" / "client_photos"
 dotenv.load_dotenv()
 userbot_username = os.getenv("USERBOT_USERNAME")
 
