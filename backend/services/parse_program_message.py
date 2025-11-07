@@ -147,10 +147,15 @@ def parse_and_save_rehab_program(db: Session, client: Client, message_text: str,
     else:
         print("--- DRY RUN Finished ---")
 
-def parse_and_save_homework_program(db: Session, client: Client, message_text: str):
-    program, created = get_or_create_program(db, client.id, 1)  # курс 1 — Д/З
-    if not created:
-        return
+def parse_and_save_homework_program(db: Session, client: Client, message_text: str, dry_run: bool = False):
+    if dry_run:
+        print("\n--- DRY RUN: Parsing Homework Program ---")
+        program = None # В сухом режиме не получаем программу из БД
+    else:
+        program, created = get_or_create_program(db, client.id, 1)  # курс 1 — Д/З
+        if not created:
+            # Если программа уже есть, и это не сухой запуск, выходим, чтобы не дублировать
+            return
 
     homework_match = re.search(r"Д/З:\s*([\s\S]*?)(?:\n\n|\Z)", message_text)
     if not homework_match:
@@ -183,21 +188,30 @@ def parse_and_save_homework_program(db: Session, client: Client, message_text: s
                 exercises.append(part)
 
             for ex_name in exercises:
-                exercise = db.query(Exercise).filter(Exercise.name == ex_name).first()
-                if not exercise:
-                    exercise = Exercise(name=ex_name, course_id=1)
-                    db.add(exercise)
-                    db.commit()
-                    print(f"✅ Додано нову вправу (Д/З): {ex_name}")
+                if dry_run:
+                    print(f"  [DRY-RUN] Would find or create exercise (Д/З): '{ex_name}'")
+                    print(f"  [DRY-RUN] Would add exercise '{ex_name}' to homework program.")
+                else:
+                    exercise = db.query(Exercise).filter(Exercise.name == ex_name).first()
+                    if not exercise:
+                        exercise = Exercise(name=ex_name, course_id=1)
+                        db.add(exercise)
+                        db.commit() # Коммитим сразу, чтобы получить ID
+                        db.refresh(exercise)
+                        print(f"✅ Додано нову вправу (Д/З): {ex_name}")
 
-                program_exercise = ProgramExercise(
-                    program_id=program.id,
-                    exercise_id=exercise.id,
-                    repeats=5,
-                    order_num=order
-                )
-                db.add(program_exercise)
+                    program_exercise = ProgramExercise(
+                        program_id=program.id,
+                        exercise_id=exercise.id,
+                        repeats=5, # По умолчанию для Д/З
+                        order_num=order
+                    )
+                    db.add(program_exercise)
+
                 order += 1
 
-    db.commit()
-    print("✅ Програма Д/З збережена")
+    if not dry_run:
+        db.commit()
+        print("✅ Програма Д/З збережена")
+    else:
+        print("--- DRY RUN Finished ---")
